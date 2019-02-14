@@ -20,7 +20,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
+import sys, os
+sys.path.append(os.path.dirname(os.path.abspath(__file__))+"/..")
 
+import logging
+import fastText
 import gensim
 import json
 import numpy
@@ -40,9 +44,13 @@ class Word2Vec(OptionParser):
         self.add_option('--window-size', action='store', type='int', dest='windowSize', default=2, help='The maximum distance between the current and predicted word within a sentence')
         self.add_option('--iterations', action='store', type='int', dest='numIteration', default=5, help='Number of iterations (default: %default)')
         self.add_option('--seed', action='store', type='int', dest='seed', default=1, help='Random number generator seed')
+        self.add_option('--method', action='store', dest='method', default=None, help='Method van be word2vec or fastText')
+        self.add_option('--corpora', action='store', dest='corpora', default=None, help='Input file as parameter')
         self.corpus = []
 
-    def buildVector(self, workerNum=8, minCount=0, vectSize=200, skipGram=True, windowSize=2, learningRate=0.05, numIteration=5, negativeSampling=5, subSampling=0.001, seed=1):
+    def buildVector(self, workerNum=8, minCount=0, vectSize=200, skipGram=True, windowSize=2, 
+                   learningRate=0.05, numIteration=5, negativeSampling=5, 
+                   subSampling=0.001, seed=1, method=None, corpora=None):
         """
         Description: Implementation of the neuronal method Word2Vec to create word vectors based on the distributional
         semantics hypothesis.
@@ -64,15 +72,37 @@ class Word2Vec(OptionParser):
 
         For more details, see: https://radimrehurek.com/gensim/models/word2vec.html
         """
-        model = gensim.models.Word2Vec(self.corpus, min_count=minCount, size=vectSize, workers=workerNum, sg=skipGram,
+        logging.info("Building the embeddings vectors...")
+        print("Building the embeddings vectors...", file=sys.stderr)
+
+        if method != None and "word2vec" in method.lower():
+            logging.info("Using word2vec method...")
+            print("Using word2vec method...", file=sys.stderr)
+            model = gensim.models.Word2Vec(self.corpus, min_count=minCount, size=vectSize, workers=workerNum, sg=skipGram,
                                        window=windowSize, alpha=learningRate, iter=numIteration, negative=negativeSampling,
                                        sample=subSampling, seed=seed)
-        self.VST = dict((k, list(numpy.float_(npf32) for npf32 in model.wv[k])) for k in model.wv.vocab.keys())
+            model.save("model.bin")
+            logging.info("Creating the vocabulary dictionary...")
+            print("Creating the vocabulary dictionary...", file=sys.stderr)
+            self.VST = dict((k, list(numpy.float_(npf32) for npf32 in model.wv[k])) for k in model.wv.vocab.keys())
+
+        if method != None and "fasttext" in method.lower() and corpora != None:
+            logging.info("Using fastText method...")
+            print("Using fastText method...", file=sys.stderr)
+            cpath=os.path.join(os.getcwd(), corpora)
+            model = fastText.train_unsupervised(input=cpath, minCount=minCount, dim=vectSize, thread=workerNum,
+                                        ws=windowSize, lr=learningRate, epoch=numIteration, neg=negativeSampling)
+            model.save_model("model.bin")
+            logging.info("Creating the vocabulary dictionary...")
+            print("Creating the vocabulary dictionary...", file=sys.stderr)
+            self.VST = dict((k, list(numpy.float_(npf32) for npf32 in model.wv[k])) for k in model.wv.vocab.keys())
 
     def run(self):
         options, args = self.parse_args()
         self.readCorpusFiles(args)
-        self.buildVector(minCount=options.minCount, vectSize=options.vectSize, workerNum=options.workerNum, skipGram=options.skipGram, windowSize=options.windowSize, numIteration=options.numIteration, seed=options.seed)
+        self.buildVector(minCount=options.minCount, vectSize=options.vectSize, workerNum=options.workerNum,
+                       skipGram=options.skipGram, windowSize=options.windowSize, numIteration=options.numIteration,
+                       seed=options.seed, method=options.method, corpora=options.corpora)
         self.writeJSON(options.json)
         self.writeTxt(options.txt)
         
@@ -89,6 +119,17 @@ class Word2Vec(OptionParser):
         f.close()
 
     def writeTxt(self, fileName):
+        if fileName is None:
+            return
+        f = open(fileName, 'w', encoding='utf-8')
+        for k, v in self.VST.items():
+            f.write(k)
+            f.write('\t')
+            f.write(str(v))
+            f.write('\n')
+        f.close()
+
+    def writeBin(self, fileName):
         if fileName is None:
             return
         f = open(fileName, 'w', encoding='utf-8')
