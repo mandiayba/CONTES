@@ -29,6 +29,9 @@ limitations under the License.
 #######################################################################################################
 # Import modules & set up logging
 #######################################################################################################
+import sys, os
+sys.path.append(os.path.dirname(os.path.abspath(__file__))+"/..")
+
 from sklearn import linear_model
 from sklearn.externals import joblib
 import numpy
