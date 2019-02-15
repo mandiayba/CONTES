@@ -53,6 +53,7 @@ class Word2Vec(OptionParser):
         self.add_option('--minNgram', action='store', type='int', dest='minNgram', default=3, help='min length of char ngrams (Default 3), to only with the FastText method')
         self.add_option('--maxNgram', action='store', type='int', dest='maxNgram', default=6, help='max length of char ngrams (Default 6), to only with the FastText method')
         self.add_option('--bucket', action='store', type='int', dest='bucket', default=2000000, help='number of buckets used for hashing ngrams, to use only with FastText method')
+        self.add_option('--fastTextHome', action='store', type='int', dest='fastTextHome', default=None, help='path to the FastText home directory. Used with when method=fasttext_optimized (see https://github.com/facebookresearch/fastText)')
         
         
         self.corpus = []
@@ -60,7 +61,7 @@ class Word2Vec(OptionParser):
     def buildVector(self, workerNum=8, minCount=0, vectSize=200, skipGram=True, windowSize=2, 
                    learningRate=0.05, numIteration=5, negativeSampling=5, 
                    subSampling=0.001, seed=1, method=None,
-                   minNgram=3, maxNgram=6, bucket=2000000):
+                   minNgram=3, maxNgram=6, bucket=2000000, fastTextHome=None):
         """
         Description: Implementation of the neuronal method Word2Vec to create word vectors based on the distributional
         semantics hypothesis.
@@ -76,10 +77,11 @@ class Word2Vec(OptionParser):
         “noise words” should be drawn (usually between 5-20). Default is 5. If set to 0, no negative samping is used.
         :param subSampling: Threshold for configuring which higher-frequency words are randomly downsampled;
         default is 1e-3, useful range is (0, 1e-5).
-        :param method:
-        :param minNgram:
-        :param maxNgram:
-        :param bucket:
+        :param method: is to specify the method used, supported methods are word2vec and fastText
+        :param minNgram: is the minimum length of char n-grams to be used for training word representations.
+        :param maxNgram: is max length of char ngrams to be used for training word representations. Set max_n to be lesser than min_n to avoid char ngrams being used.
+        :param bucket: Character ngrams are hashed into a fixed number of buckets, in order to limit the memory usage of the model. This option specifies the number of buckets used by the model.
+        :param fastTextHome: path to the original and optimized fastText implementation
         
         :return: vst (vector space of terms) is a dictionary containing the form of token as key and the corresponding
         vector as unique value.
@@ -122,9 +124,9 @@ class Word2Vec(OptionParser):
             logging.info("Using fastText method...")
             print("Using fastText method...", file=sys.stderr)
             # train the model
-            import inspect
-            path2fastText = os.path.dirname(inspect.getfile(nativeFastText))
-            FastText_OPT.train(ft_path=path2fastText, corpus_file=self.corpus, 
+            #import inspect
+            #path2fastText = os.path.dirname(inspect.getfile(nativeFastText))
+            FastText_OPT.train(ft_path=fastTextHome, corpus_file=self.corpus, 
                     model = 'skipgram', size = vectSize, alpha = learningRate, window = windowSize, 
                     min_count = minCount, negative = negativeSampling, iter = numIteration,
                     min_n = minNgram, max_n = maxNgram, threads = workerNum) 
@@ -140,7 +142,7 @@ class Word2Vec(OptionParser):
         self.buildVector(minCount=options.minCount, vectSize=options.vectSize, workerNum=options.workerNum,
                        skipGram=options.skipGram, windowSize=options.windowSize, numIteration=options.numIteration,
                        seed=options.seed, method=options.method,
-                       minNgram=options.minNgram, maxNgram=options.maxNgram, bucket=options.bucket)
+                       minNgram=options.minNgram, maxNgram=options.maxNgram, bucket=options.bucket, fastTextHome=options.fastTextHome)
         self.writeJSON(options.json)
         self.writeTxt(options.txt)
         self.writeBin(options.bin)
