@@ -35,6 +35,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__))+"/..")
 from sklearn import linear_model
 from sklearn.externals import joblib
 import numpy
+import gensim
 from sys import stderr, stdin
 from optparse import OptionParser
 from utils import word2term, onto
@@ -86,7 +87,7 @@ def getMatrix(dl_terms, vstTerm, dl_associations, vso, symbol="___"):
 
 
 
-def train(vst_onlyTokens, dl_terms, dl_associations, ontology, factor):
+def train(vst_onlyTokens, dl_terms, dl_associations, ontology, factor=1.0):
     """
     Description: Main module which calculates the regression parameters (a matrix)
     :param vst_onlyTokens: An initial VST containing only tokens and associated vectors.
@@ -127,7 +128,8 @@ def loadJSON(filename):
 class Train(OptionParser):
     def __init__(self):
         OptionParser.__init__(self, usage='usage: %prog [options]')
-        self.add_option('--word-vectors', action='store', type='string', dest='word_vectors', help='path to word vectors file as produced by word2vec')
+        self.add_option('--word-vectors', action='store', type='string', dest='word_vectors', help='path to word vectors JSON file as produced by word2vec')
+        self.add_option('--word-vectors-bin', action='store', type='string', dest='word_vectors_bin', help='path to word vectors binary file as produced by word2vec')
         self.add_option('--terms', action='append', type='string', dest='terms', help='path to terms file in JSON format (map: id -> array of tokens)')
         self.add_option('--attributions', action='append', type='string', dest='attributions', help='path to attributions file in JSON format (map: id -> array of concept ids)')
         self.add_option('--factor', action='append', type='float', dest='factors', default=[], help='parent concept weight factor (default: 1.0)')
@@ -139,8 +141,10 @@ class Train(OptionParser):
         options, args = self.parse_args()
         if len(args) > 0:
             raise Exception('stray arguments: ' + ' '.join(args))
-        if options.word_vectors is None:
-            raise Exception('missing --word-vectors')
+        if options.word_vectors is None and options.word_vectors_bin is None:
+            raise Exception('missing either --word-vectors or --word-vectors-bin')
+        if options.word_vectors is not None and options.word_vectors_bin is not None:
+            raise Exception('incompatible --word-vectors or --word-vectors-bin')        
         if options.ontology is None:
             raise Exception('missing --ontology')
         if not options.terms:
@@ -160,9 +164,15 @@ class Train(OptionParser):
             stderr.write('defaulting %d factors to 1.0\n' % n)
             stderr.flush()
             options.factors.extend([1.0]*n)
-        stderr.write('loading word embeddings: %s\n' % options.word_vectors)
-        stderr.flush()
-        word_vectors = loadJSON(options.word_vectors)
+        if options.word_vectors is not None:
+            stderr.write('loading word embeddings: %s\n' % options.word_vectors)
+            stderr.flush()
+            word_vectors = loadJSON(options.word_vectors)
+        elif options.word_vectors_bin is not None:
+            stderr.write('loading word embeddings: %s\n' % options.word_vectors_bin)
+            stderr.flush()
+            model = gensim.models.Word2Vec.load(options.word_vectors_bin)
+            word_vectors = dict((k, list(numpy.float_(npf32) for npf32 in model.wv[k])) for k in model.wv.vocab.keys())
         stderr.write('loading ontology: %s\n' % options.ontology)
         stderr.flush()
         ontology = onto.loadOnto(options.ontology)
